@@ -16,9 +16,16 @@ public class Customer {
   public Customer() {
   }
 
-  public Customer(String customerId, int clientId, String firstName, String lastName, Date dateOfBirth, String ssn,
+public Customer(String customerId, int clientId, String firstName, String lastName, Date dateOfBirth, String ssn,
       String socialInsurancenum, String tin, String phoneNumber, Address address, Set<Account> accounts) {
     super();
+    
+    // Validate input parameters to prevent null pointer exceptions and ensure data integrity
+    if (customerId == null || firstName == null || lastName == null) {
+        throw new IllegalArgumentException("Required customer fields cannot be null");
+    }
+    
+    // Assign validated parameters to instance variables
     this.clientId = clientId;
     this.customerId = customerId;
     this.firstName = firstName;
@@ -29,8 +36,23 @@ public class Customer {
     this.tin = tin;
     this.phoneNumber = phoneNumber;
     this.address = address;
-    this.accounts = accounts;
-  }
+    this.accounts = accounts != null ? accounts : new HashSet<Account>();
+}
+
+
+private String sanitizeInput(String input) {
+    // Remove any potentially dangerous characters
+    if (input == null) {
+        return "";
+    }
+    // Remove HTML tags and special characters
+    return input.replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll("\"", "&quot;")
+                .replaceAll("'", "&#x27;")
+                .replaceAll("/", "&#x2F;");
+}
+
 
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
@@ -156,12 +178,35 @@ public class Customer {
     this.accounts = accounts;
   }
 
-  @Override
-  public String toString() {
-    return "Customer [id=" + id + ", customerId=" + customerId + ", clientId=" + clientId + ", firstName=" + firstName
-        + ", lastName=" + lastName + ", dateOfBirth=" + dateOfBirth + ", ssn=" + ssn + ", socialInsurancenum="
-        + socialInsurancenum + ", tin=" + tin + ", phoneNumber=" + phoneNumber + ", address=" + address + ", accounts="
-        + accounts + "]";
-  }
+@Override
+public String toString() {
+    // HTML-encode all user-supplied data to prevent XSS when toString() is used in web contexts
+    return "Customer [id=" + id 
+        + ", customerId=" + StringEscapeUtils.escapeHtml4(customerId) 
+        + ", clientId=" + clientId 
+        + ", firstName=" + StringEscapeUtils.escapeHtml4(firstName)
+        + ", lastName=" + StringEscapeUtils.escapeHtml4(lastName) 
+        + ", dateOfBirth=" + dateOfBirth 
+        + ", ssn=" + StringEscapeUtils.escapeHtml4(ssn) 
+        + ", socialInsurancenum=" + StringEscapeUtils.escapeHtml4(socialInsurancenum)
+        + ", tin=" + StringEscapeUtils.escapeHtml4(tin) 
+        + ", phoneNumber=" + StringEscapeUtils.escapeHtml4(phoneNumber) 
+        + ", address=" + (address != null ? address.toString() : "null") 
+        + ", accounts=" + (accounts != null ? accounts.toString() : "null") + "]";
+}
+
+
+public String toSafeString() {
+    // Safe version for HTML output - excludes sensitive data and uses HTML encoding
+    return "Customer [id=" + Encode.forHtml(String.valueOf(id)) + 
+           ", customerId=" + Encode.forHtml(customerId) + 
+           ", clientId=" + clientId + 
+           ", firstName=" + Encode.forHtml(firstName) + 
+           ", lastName=" + Encode.forHtml(lastName) + 
+           ", dateOfBirth=" + Encode.forHtml(String.valueOf(dateOfBirth)) + 
+           ", phoneNumber=" + Encode.forHtml(phoneNumber) + 
+           ", address=" + Encode.forHtml(String.valueOf(address)) + "]";
+}
+
 
 }
