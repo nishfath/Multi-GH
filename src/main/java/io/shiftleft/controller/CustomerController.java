@@ -216,52 +216,204 @@ public class CustomerController {
    * @param request
    * @throws Exception
    */
-  @RequestMapping(value = "/saveSettings", method = RequestMethod.GET)
-  public void saveSettings(HttpServletResponse httpResponse, WebRequest request) throws Exception {
+@RequestMapping(value = "/saveSettings", method = RequestMethod.POST)
+public void saveSettings(HttpServletResponse httpResponse, WebRequest request) throws Exception {
+    // Logger for security events
+    Logger logger = LoggerFactory.getLogger(CustomerController.class);
+    
     // "Settings" will be stored in a cookie
     // schema: base64(filename,value1,value2...), md5sum(base64(filename,value1,value2...))
+    
+    try {
+        if (!checkCookie(request)) {
+            logger.warn("Cookie validation failed");
+            httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            httpResponse.getOutputStream().println("Authentication error");
+            return;
+        }
 
-    if (!checkCookie(request)){
-      httpResponse.getOutputStream().println("Error");
-      throw new Exception("cookie is incorrect");
+        String settingsCookie = request.getHeader("Cookie");
+        if (settingsCookie == null || settingsCookie.isEmpty()) {
+            logger.warn("Cookie header is missing");
+            httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            httpResponse.getOutputStream().println("Invalid request");
+            return;
+        }
+
+        String[] cookie = settingsCookie.split(",");
+        if (cookie.length < 2) {
+            logger.warn("Malformed cookie received");
+            httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            httpResponse.getOutputStream().println("Malformed cookie");
+            return;
+        }
+
+        String base64txt = cookie[0].replace("settings=", "");
+
+        // Check md5sum for integrity verification
+        String cookieMD5sum = cookie[1];
+        String calcMD5Sum = DigestUtils.md5Hex(base64txt);
+        if (!cookieMD5sum.equals(calcMD5Sum)) {
+            logger.warn("MD5 checksum validation failed");
+            httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            httpResponse.getOutputStream().println("Integrity check failed");
+            return;
+        }
+
+        // Decode and parse settings
+        String[] settings = new String(Base64.getDecoder().decode(base64txt)).split(",");
+        if (settings.length < 1) {
+            logger.warn("No filename provided in settings");
+            httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            httpResponse.getOutputStream().println("Invalid settings format");
+            return;
+        }
+
+        // Validate and sanitize filename to prevent directory traversal
+        String filename = sanitizeFilename(settings[0]);
+        if (filename == null || filename.isEmpty()) {
+            logger.warn("Invalid filename after sanitization: " + settings[0]);
+            httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            httpResponse.getOutputStream().println("Invalid filename");
+            return;
+        }
+
+        // Storage will have ClassPathResource as basepath
+        ClassPathResource cpr = new ClassPathResource("./static/");
+        Path basePath = Paths.get(cpr.getPath()).normalize().toAbsolutePath();
+        Path targetPath = basePath.resolve(filename).normalize().toAbsolutePath();
+
+        // Ensure the resolved path is within the base directory (prevent directory traversal)
+        if (!targetPath.startsWith(basePath)) {
+            logger.error("Directory traversal attempt detected: " + settings[0]);
+            httpResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            httpResponse.getOutputStream().println("Access denied");
+            return;
+        }
+
+        File file = targetPath.toFile();
+        
+        // Validate file extension (whitelist approach)
+        if (!isAllowedFileExtension(filename)) {
+            logger.warn("Disallowed file extension: " + filename);
+            httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            httpResponse.getOutputStream().println("File type not allowed");
+            return;
+        }
+
+        // Create parent directories if they don't exist (within allowed base path)
+        File parentDir = file.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            if (!parentDir.mkdirs()) {
+                logger.error("Failed to create directory: " + parentDir.getAbsolutePath());
+                httpResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                httpResponse.getOutputStream().println("Failed to create directory");
+                return;
+            }
+        }
+
+        // Write settings to file
+        try (FileOutputStream fos = new FileOutputStream(file, true)) {
+            // First entry is the filename -> remove it
+            String[] settingsArr = Arrays.copyOfRange(settings, 1, settings.length);
+            
+            // Validate settings content before writing
+            for (String setting : settingsArr) {
+                if (!isValidSettingContent(setting)) {
+                    logger.warn("Invalid setting content detected");
+                    httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                    httpResponse.getOutputStream().println("Invalid setting content");
+                    return;
+                }
+            }
+            
+            // Write one setting per line
+            fos.write(String.join("\n", settingsArr).getBytes("UTF-8"));
+            fos.write(("\n" + cookie[cookie.length - 1]).getBytes("UTF-8"));
+        }
+        
+        logger.info("Settings saved successfully for file: " + filename);
+        httpResponse.setStatus(HttpServletResponse.SC_OK);
+        httpResponse.getOutputStream().println("Settings Saved");
+        
+    } catch (IllegalArgumentException e) {
+        logger.error("Invalid input data: " + e.getMessage());
+        httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        httpResponse.getOutputStream().println("Invalid input");
+    } catch (IOException e) {
+        logger.error("I/O error during file operation: " + e.getMessage());
+        httpResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        httpResponse.getOutputStream().println("Internal server error");
+    } catch (Exception e) {
+        logger.error("Unexpected error: " + e.getMessage());
+        httpResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        httpResponse.getOutputStream().println("Internal server error");
     }
+}
 
-    String settingsCookie = request.getHeader("Cookie");
-    String[] cookie = settingsCookie.split(",");
-	if(cookie.length<2) {
-	  httpResponse.getOutputStream().println("Malformed cookie");
-      throw new Exception("cookie is incorrect");
+private String sanitizeFilename(String filename) {
+    if (filename == null) {
+        return null;
     }
-
-    String base64txt = cookie[0].replace("settings=","");
-
-    // Check md5sum
-    String cookieMD5sum = cookie[1];
-    String calcMD5Sum = DigestUtils.md5Hex(base64txt);
-	if(!cookieMD5sum.equals(calcMD5Sum))
-    {
-      httpResponse.getOutputStream().println("Wrong md5");
-      throw new Exception("Invalid MD5");
+    
+    // Remove any path separators and null bytes
+    String sanitized = filename.replaceAll("[\\x00/\\\\:]", "");
+    
+    // Remove parent directory references
+    sanitized = sanitized.replaceAll("\\.\\.", "");
+    
+    // Remove leading/trailing whitespace and dots
+    sanitized = sanitized.trim().replaceAll("^\\.+", "");
+    
+    // Only allow alphanumeric characters, hyphens, underscores, and single dots
+    if (!Pattern.matches("^[a-zA-Z0-9._-]+$", sanitized)) {
+        return null;
     }
-
-    // Now we can store on filesystem
-    String[] settings = new String(Base64.getDecoder().decode(base64txt)).split(",");
-	// storage will have ClassPathResource as basepath
-    ClassPathResource cpr = new ClassPathResource("./static/");
-	  File file = new File(cpr.getPath()+settings[0]);
-    if(!file.exists()) {
-      file.getParentFile().mkdirs();
+    
+    // Ensure filename is not empty after sanitization
+    if (sanitized.isEmpty() || sanitized.length() > 255) {
+        return null;
     }
+    
+    return sanitized;
+}
 
-    FileOutputStream fos = new FileOutputStream(file, true);
-    // First entry is the filename -> remove it
-    String[] settingsArr = Arrays.copyOfRange(settings, 1, settings.length);
-    // on setting at a linez
-    fos.write(String.join("\n",settingsArr).getBytes());
-    fos.write(("\n"+cookie[cookie.length-1]).getBytes());
-    fos.close();
-    httpResponse.getOutputStream().println("Settings Saved");
-  }
+private boolean isAllowedFileExtension(String filename) {
+    if (filename == null) {
+        return false;
+    }
+    
+    // Whitelist of allowed file extensions
+    String[] allowedExtensions = {".txt", ".json", ".xml", ".properties", ".conf"};
+    
+    String lowerFilename = filename.toLowerCase();
+    for (String ext : allowedExtensions) {
+        if (lowerFilename.endsWith(ext)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+private boolean isValidSettingContent(String content) {
+    if (content == null) {
+        return false;
+    }
+    
+    // Prevent excessively long content
+    if (content.length() > 10000) {
+        return false;
+    }
+    
+    // Check for null bytes or other control characters that might cause issues
+    if (content.contains("\u0000")) {
+        return false;
+    }
+    
+    return true;
+}
+
 
   /**
    * Debug test for saving and reading a customer
