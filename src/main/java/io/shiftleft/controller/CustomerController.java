@@ -277,34 +277,63 @@ public class CustomerController {
    * @return String
    * @throws IOException
    */
-  @RequestMapping(value = "/debug", method = RequestMethod.GET)
-  public String debug(@RequestParam String customerId,
-					  @RequestParam int clientId,
-					  @RequestParam String firstName,
-                      @RequestParam String lastName,
-                      @RequestParam String dateOfBirth,
-                      @RequestParam String ssn,
-					  @RequestParam String socialSecurityNum,
-                      @RequestParam String tin,
-                      @RequestParam String phoneNumber,
-                      HttpServletResponse httpResponse,
-                     WebRequest request) throws IOException{
+@RequestMapping(value = "/debug", method = RequestMethod.GET)
+public String debug(@RequestParam String customerId,
+                    @RequestParam int clientId,
+                    @RequestParam String firstName,
+                    @RequestParam String lastName,
+                    @RequestParam String dateOfBirth,
+                    @RequestParam String ssn,
+                    @RequestParam String socialSecurityNum,
+                    @RequestParam String tin,
+                    @RequestParam String phoneNumber,
+                    HttpServletResponse httpResponse,
+                    WebRequest request) throws IOException {
 
-    // empty for now, because we debug
+    // Sanitize all input parameters to prevent XSS attacks
+    String sanitizedCustomerId = Encode.forHtml(customerId);
+    String sanitizedFirstName = Encode.forHtml(firstName);
+    String sanitizedLastName = Encode.forHtml(lastName);
+    String sanitizedSsn = Encode.forHtml(ssn);
+    String sanitizedSocialSecurityNum = Encode.forHtml(socialSecurityNum);
+    String sanitizedTin = Encode.forHtml(tin);
+    String sanitizedPhoneNumber = Encode.forHtml(phoneNumber);
+    
+    // Validate and sanitize dateOfBirth separately as it needs parsing
+    String sanitizedDateOfBirth = Encode.forHtml(dateOfBirth);
+    
+    // Create accounts set
     Set<Account> accounts1 = new HashSet<Account>();
-    //dateofbirth example -> "1982-01-10"
-    Customer customer1 = new Customer(customerId, clientId, firstName, lastName, DateTime.parse(dateOfBirth).toDate(),
-                                      ssn, socialSecurityNum, tin, phoneNumber, new Address("Debug str",
-                                      "", "Debug city", "CA", "12345"),
-                                      accounts1);
+    
+    // Create customer with sanitized inputs
+    Customer customer1 = new Customer(
+        sanitizedCustomerId, 
+        clientId, 
+        sanitizedFirstName, 
+        sanitizedLastName, 
+        DateTime.parse(sanitizedDateOfBirth).toDate(),
+        sanitizedSsn, 
+        sanitizedSocialSecurityNum, 
+        sanitizedTin, 
+        sanitizedPhoneNumber, 
+        new Address("Debug str", "", "Debug city", "CA", "12345"),
+        accounts1
+    );
 
+    // Save customer to repository
     customerRepository.save(customer1);
+    
+    // Set response status and location header
     httpResponse.setStatus(HttpStatus.CREATED.value());
     httpResponse.setHeader("Location", String.format("%s/customers/%s",
                            request.getContextPath(), customer1.getId()));
 
-    return customer1.toString().toLowerCase().replace("script","");
-  }
+    // Return properly encoded output instead of raw toString()
+    // Use a safe representation instead of direct toString() output
+    String safeOutput = Encode.forHtml(customer1.toString());
+    return safeOutput;
+}
+
 
 	/**
 	 * Debug test for saving and reading a customer
