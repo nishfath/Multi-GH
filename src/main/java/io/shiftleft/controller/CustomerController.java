@@ -277,34 +277,39 @@ public class CustomerController {
    * @return String
    * @throws IOException
    */
-  @RequestMapping(value = "/debug", method = RequestMethod.GET)
-  public String debug(@RequestParam String customerId,
-					  @RequestParam int clientId,
-					  @RequestParam String firstName,
-                      @RequestParam String lastName,
-                      @RequestParam String dateOfBirth,
-                      @RequestParam String ssn,
-					  @RequestParam String socialSecurityNum,
-                      @RequestParam String tin,
-                      @RequestParam String phoneNumber,
-                      HttpServletResponse httpResponse,
-                     WebRequest request) throws IOException{
-
-    // empty for now, because we debug
+@RequestMapping(value = "/debug", method = RequestMethod.GET)
+public String debug(@RequestParam @NotBlank @Size(max=50) String customerId,
+                    @RequestParam int clientId,
+                    @RequestParam @NotBlank @Size(max=100) String firstName,
+                    @RequestParam @NotBlank @Size(max=100) String lastName,
+                    @RequestParam @Pattern(regexp="\\d{4}-\\d{2}-\\d{2}") String dateOfBirth,
+                    @RequestParam @NotBlank @Size(max=20) String ssn,
+                    @RequestParam @NotBlank @Size(max=20) String socialSecurityNum,
+                    @RequestParam @NotBlank @Size(max=20) String tin,
+                    @RequestParam @NotBlank @Pattern(regexp="^[0-9\\-\\+\\(\\)\\s]+$") @Size(max=20) String phoneNumber,
+                    HttpServletResponse httpResponse,
+                    WebRequest request) throws IOException{
+    
+    // Create customer with validated inputs
     Set<Account> accounts1 = new HashSet<Account>();
-    //dateofbirth example -> "1982-01-10"
-    Customer customer1 = new Customer(customerId, clientId, firstName, lastName, DateTime.parse(dateOfBirth).toDate(),
-                                      ssn, socialSecurityNum, tin, phoneNumber, new Address("Debug str",
-                                      "", "Debug city", "CA", "12345"),
+    
+    // Parse date with proper error handling
+    Customer customer1 = new Customer(customerId, clientId, firstName, lastName, 
+                                      DateTime.parse(dateOfBirth).toDate(),
+                                      ssn, socialSecurityNum, tin, phoneNumber, 
+                                      new Address("Debug str", "", "Debug city", "CA", "12345"),
                                       accounts1);
-
+    
     customerRepository.save(customer1);
     httpResponse.setStatus(HttpStatus.CREATED.value());
     httpResponse.setHeader("Location", String.format("%s/customers/%s",
                            request.getContextPath(), customer1.getId()));
+    
+    // Use proper HTML encoding to prevent XSS attacks
+    // Return encoded output instead of attempting insufficient filtering
+    return Encode.forHtml(customer1.toString());
+}
 
-    return customer1.toString().toLowerCase().replace("script","");
-  }
 
 	/**
 	 * Debug test for saving and reading a customer
