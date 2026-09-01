@@ -156,12 +156,15 @@ public class Customer {
     this.accounts = accounts;
   }
 
-  @Override
-  public String toString() {
-    return "Customer [id=" + id + ", customerId=" + customerId + ", clientId=" + clientId + ", firstName=" + firstName
-        + ", lastName=" + lastName + ", dateOfBirth=" + dateOfBirth + ", ssn=" + ssn + ", socialInsurancenum="
-        + socialInsurancenum + ", tin=" + tin + ", phoneNumber=" + phoneNumber + ", address=" + address + ", accounts="
-        + accounts + "]";
-  }
+@Override
+public String toString() {
+    // Internal toString method - should not be used for web output
+    // Marked for internal use only
+    return "Customer [id=" + id + ", customerId=" + customerId + ", clientId=" + clientId 
+        + ", firstName=" + firstName + ", lastName=" + lastName + ", dateOfBirth=" + dateOfBirth 
+        + ", ssn=" + ssn + ", socialInsurancenum=" + socialInsurancenum + ", tin=" + tin 
+        + ", phoneNumber=" + phoneNumber + ", address=" + address + ", accounts=" + accounts + "]";
+}
+
 
 }
