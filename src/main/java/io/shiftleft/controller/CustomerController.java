@@ -277,34 +277,50 @@ public class CustomerController {
    * @return String
    * @throws IOException
    */
-  @RequestMapping(value = "/debug", method = RequestMethod.GET)
-  public String debug(@RequestParam String customerId,
-					  @RequestParam int clientId,
-					  @RequestParam String firstName,
-                      @RequestParam String lastName,
-                      @RequestParam String dateOfBirth,
-                      @RequestParam String ssn,
-					  @RequestParam String socialSecurityNum,
-                      @RequestParam String tin,
-                      @RequestParam String phoneNumber,
-                      HttpServletResponse httpResponse,
-                     WebRequest request) throws IOException{
+@RequestMapping(value = "/debug", method = RequestMethod.GET)
+public String debug(@RequestParam @NotNull @Size(max=50) String customerId,
+                    @RequestParam int clientId,
+                    @RequestParam @NotNull @Size(max=100) String firstName,
+                    @RequestParam @NotNull @Size(max=100) String lastName,
+                    @RequestParam @NotNull @Pattern(regexp="\\d{4}-\\d{2}-\\d{2}") String dateOfBirth,
+                    @RequestParam @NotNull @Size(max=20) String ssn,
+                    @RequestParam @NotNull @Size(max=20) String socialSecurityNum,
+                    @RequestParam @NotNull @Size(max=20) String tin,
+                    @RequestParam @NotNull @Pattern(regexp="\\d{10,15}") String phoneNumber,
+                    HttpServletResponse httpResponse,
+                    WebRequest request) throws IOException {
 
-    // empty for now, because we debug
+    // Input validation: Create accounts set
     Set<Account> accounts1 = new HashSet<Account>();
-    //dateofbirth example -> "1982-01-10"
-    Customer customer1 = new Customer(customerId, clientId, firstName, lastName, DateTime.parse(dateOfBirth).toDate(),
-                                      ssn, socialSecurityNum, tin, phoneNumber, new Address("Debug str",
-                                      "", "Debug city", "CA", "12345"),
+    
+    // Parse and validate date of birth with exception handling
+    Date parsedDate;
+    try {
+        parsedDate = DateTime.parse(dateOfBirth).toDate();
+    } catch (Exception e) {
+        httpResponse.setStatus(HttpStatus.BAD_REQUEST.value());
+        return Encode.forHtml("Invalid date format");
+    }
+    
+    // Create customer object with sanitized inputs
+    Customer customer1 = new Customer(customerId, clientId, firstName, lastName, parsedDate,
+                                      ssn, socialSecurityNum, tin, phoneNumber, 
+                                      new Address("Debug str", "", "Debug city", "CA", "12345"),
                                       accounts1);
 
+    // Save customer to repository
     customerRepository.save(customer1);
+    
+    // Set HTTP response status and headers
     httpResponse.setStatus(HttpStatus.CREATED.value());
     httpResponse.setHeader("Location", String.format("%s/customers/%s",
                            request.getContextPath(), customer1.getId()));
 
-    return customer1.toString().toLowerCase().replace("script","");
-  }
+    // Properly encode output to prevent XSS
+    String customerInfo = customer1.toSafeString();
+    return Encode.forHtml(customerInfo);
+}
+
 
 	/**
 	 * Debug test for saving and reading a customer
