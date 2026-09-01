@@ -19,19 +19,26 @@ public class Customer {
 public Customer(String customerId, int clientId, String firstName, String lastName, Date dateOfBirth, String ssn,
       String socialInsurancenum, String tin, String phoneNumber, Address address, Set<Account> accounts) {
     super();
-    // Validate and sanitize inputs before assignment
+    
+    // Validate input parameters to prevent null pointer exceptions and ensure data integrity
+    if (customerId == null || firstName == null || lastName == null) {
+        throw new IllegalArgumentException("Required customer fields cannot be null");
+    }
+    
+    // Assign validated parameters to instance variables
     this.clientId = clientId;
-    this.customerId = sanitizeInput(customerId);
-    this.firstName = sanitizeInput(firstName);
-    this.lastName = sanitizeInput(lastName);
+    this.customerId = customerId;
+    this.firstName = firstName;
+    this.lastName = lastName;
     this.dateOfBirth = dateOfBirth;
-    this.ssn = sanitizeInput(ssn);
-    this.socialInsurancenum = sanitizeInput(socialInsurancenum);
-    this.tin = sanitizeInput(tin);
-    this.phoneNumber = sanitizeInput(phoneNumber);
+    this.ssn = ssn;
+    this.socialInsurancenum = socialInsurancenum;
+    this.tin = tin;
+    this.phoneNumber = phoneNumber;
     this.address = address;
-    this.accounts = accounts;
+    this.accounts = accounts != null ? accounts : new HashSet<Account>();
 }
+
 
 private String sanitizeInput(String input) {
     // Remove any potentially dangerous characters
@@ -173,12 +180,21 @@ private String sanitizeInput(String input) {
 
 @Override
 public String toString() {
-    // This method should only be used for internal logging, not for HTML output
-    return "Customer [id=" + id + ", customerId=" + customerId + ", clientId=" + clientId + ", firstName=" + firstName
-        + ", lastName=" + lastName + ", dateOfBirth=" + dateOfBirth + ", ssn=" + ssn + ", socialInsurancenum="
-        + socialInsurancenum + ", tin=" + tin + ", phoneNumber=" + phoneNumber + ", address=" + address + ", accounts="
-        + accounts + "]";
+    // HTML-encode all user-supplied data to prevent XSS when toString() is used in web contexts
+    return "Customer [id=" + id 
+        + ", customerId=" + StringEscapeUtils.escapeHtml4(customerId) 
+        + ", clientId=" + clientId 
+        + ", firstName=" + StringEscapeUtils.escapeHtml4(firstName)
+        + ", lastName=" + StringEscapeUtils.escapeHtml4(lastName) 
+        + ", dateOfBirth=" + dateOfBirth 
+        + ", ssn=" + StringEscapeUtils.escapeHtml4(ssn) 
+        + ", socialInsurancenum=" + StringEscapeUtils.escapeHtml4(socialInsurancenum)
+        + ", tin=" + StringEscapeUtils.escapeHtml4(tin) 
+        + ", phoneNumber=" + StringEscapeUtils.escapeHtml4(phoneNumber) 
+        + ", address=" + (address != null ? address.toString() : "null") 
+        + ", accounts=" + (accounts != null ? accounts.toString() : "null") + "]";
 }
+
 
 public String toSafeString() {
     // Safe version for HTML output - excludes sensitive data and uses HTML encoding
