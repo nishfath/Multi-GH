@@ -16,21 +16,24 @@ public class Customer {
   public Customer() {
   }
 
-  public Customer(String customerId, int clientId, String firstName, String lastName, Date dateOfBirth, String ssn,
+public Customer(String customerId, int clientId, String firstName, String lastName, Date dateOfBirth, String ssn,
       String socialInsurancenum, String tin, String phoneNumber, Address address, Set<Account> accounts) {
     super();
+    // Input validation and sanitization should be done at the controller level
+    // but we add null checks here for defensive programming
     this.clientId = clientId;
-    this.customerId = customerId;
-    this.firstName = firstName;
-    this.lastName = lastName;
+    this.customerId = customerId != null ? customerId : "";
+    this.firstName = firstName != null ? firstName : "";
+    this.lastName = lastName != null ? lastName : "";
     this.dateOfBirth = dateOfBirth;
-    this.ssn = ssn;
-    this.socialInsurancenum = socialInsurancenum;
-    this.tin = tin;
-    this.phoneNumber = phoneNumber;
+    this.ssn = ssn != null ? ssn : "";
+    this.socialInsurancenum = socialInsurancenum != null ? socialInsurancenum : "";
+    this.tin = tin != null ? tin : "";
+    this.phoneNumber = phoneNumber != null ? phoneNumber : "";
     this.address = address;
-    this.accounts = accounts;
-  }
+    this.accounts = accounts != null ? accounts : new HashSet<Account>();
+}
+
 
   @Id
   @GeneratedValue(strategy = GenerationType.AUTO)
@@ -156,12 +159,16 @@ public class Customer {
     this.accounts = accounts;
   }
 
-  @Override
-  public String toString() {
+@Override
+public String toString() {
+    // The toString method itself doesn't need encoding as it's not directly outputted to HTML
+    // Encoding should happen at the presentation layer (controller/view)
+    // However, we keep this method simple and let the controller handle sanitization
     return "Customer [id=" + id + ", customerId=" + customerId + ", clientId=" + clientId + ", firstName=" + firstName
         + ", lastName=" + lastName + ", dateOfBirth=" + dateOfBirth + ", ssn=" + ssn + ", socialInsurancenum="
         + socialInsurancenum + ", tin=" + tin + ", phoneNumber=" + phoneNumber + ", address=" + address + ", accounts="
         + accounts + "]";
-  }
+}
+
 
 }

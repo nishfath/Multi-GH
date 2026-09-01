@@ -28,17 +28,25 @@ public class AdminController {
   private String fail = "redirect:/";
 
   // helper
-  private boolean isAdmin(String auth)
-  {
+private boolean isAdmin(String auth) {
     try {
-      ByteArrayInputStream bis = new ByteArrayInputStream(Base64.getDecoder().decode(auth));
-      ObjectInputStream objectInputStream = new ObjectInputStream(bis);
-      Object authToken = objectInputStream.readObject();
-      return ((AuthToken) authToken).isAdmin();
+        // Use JWT-based token validation instead of Java deserialization
+        // Parse and validate the JWT token
+        Claims claims = Jwts.parserBuilder()
+            .setSigningKey(getSecretKey())
+            .build()
+            .parseClaimsJws(auth)
+            .getBody();
+        
+        // Verify the role claim
+        String role = claims.get("role", String.class);
+        return "ADMIN".equals(role);
     } catch (Exception ex) {
-      System.out.println(" cookie cannot be deserialized: "+ex.getMessage());
-      return false;
+        System.out.println("Invalid authentication token: " + ex.getMessage());
+        return false;
     }
+}
+
   }
 
   //
@@ -81,47 +89,51 @@ public class AdminController {
    * @return redirect to company numbers
    * @throws Exception
    */
-  @RequestMapping(value = "/admin/login", method = RequestMethod.POST)
-  public String doPostLogin(@CookieValue(value = "auth", defaultValue = "notset") String auth, @RequestBody String password, HttpServletResponse response, HttpServletRequest request) throws Exception {
+@RequestMapping(value = "/admin/login", method = RequestMethod.POST)
+public String doPostLogin(@CookieValue(value = "auth", defaultValue = "notset") String auth, @RequestBody String password, HttpServletResponse response, HttpServletRequest request) throws Exception {
     String succ = "redirect:/admin/printSecrets";
 
     try {
-      // no cookie no fun
-      if (!auth.equals("notset")) {
-        if(isAdmin(auth)) {
-          request.getSession().setAttribute("auth",auth);
-          return succ;
+        // Check existing valid token
+        if (!auth.equals("notset")) {
+            if(isAdmin(auth)) {
+                request.getSession().setAttribute("auth", auth);
+                return succ;
+            }
         }
-      }
 
-      // split password=value
-      String[] pass = password.split("=");
-      if(pass.length!=2) {
+        // Parse and validate password input
+        String[] pass = password.split("=");
+        if(pass.length != 2) {
+            return fail;
+        }
+        
+        // Use constant-time comparison to prevent timing attacks
+        if(pass[1] != null && pass[1].length() > 0 && constantTimeEquals(pass[1], "shiftleftsecret")) {
+            // Generate JWT token instead of serialized object
+            String jwtToken = generateJwtToken("ADMIN");
+            
+            // Set secure cookie attributes
+            Cookie authCookie = new Cookie("auth", jwtToken);
+            authCookie.setHttpOnly(true);
+            authCookie.setSecure(true); // Only send over HTTPS
+            authCookie.setPath("/");
+            authCookie.setMaxAge(3600); // 1 hour expiration
+            response.addCookie(authCookie);
+
+            // Store token in session
+            request.getSession().setAttribute("auth", jwtToken);
+
+            return succ;
+        }
         return fail;
-      }
-      // compare pass
-      if(pass[1] != null && pass[1].length()>0 && pass[1].equals("shiftleftsecret"))
-      {
-        AuthToken authToken = new AuthToken(AuthToken.ADMIN);
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bos);
-        oos.writeObject(authToken);
-        String cookieValue = new String(Base64.getEncoder().encode(bos.toByteArray()));
-        response.addCookie(new Cookie("auth", cookieValue ));
-
-        // cookie is lost after redirection
-        request.getSession().setAttribute("auth",cookieValue);
-
-        return succ;
-      }
-      return fail;
+    } catch (Exception ex) {
+        // Log error without exposing stack trace to user
+        System.err.println("Login error: " + ex.getMessage());
+        return fail;
     }
-    catch (Exception ex)
-    {
-      ex.printStackTrace();
-      // no succ == fail
-      return fail;
-    }
+}
+
   }
 
   /**
